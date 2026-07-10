@@ -2,28 +2,22 @@ import streamlit as st
 from pathlib import Path
 import tempfile
 
-from dxf_bbs_extractor import process_dxf
-
+# This must be called EXACTLY ONCE, right at the very beginning
 st.set_page_config(
+    page_title="CIVSOL BBS Extraction",
+    layout="wide",
     client_config={"hideTopBar": True}
 )
 
-st.set_page_config(
-    page_title="CIVSOL BBS Extraction",
-    layout="wide"
-)
+from dxf_bbs_extractor import process_dxf
 
 st.title("CIVSOL BBS Automation")
 
 st.write(
-    "Upload a DXF drawing and automatically generate a Bar Bending Schedule." \
-    "\n" \
-    "The file is to be in dxf " \
-    "Every member is to have an annotation" \
-    "\n" \
-    "\n" \
-    "Requirements if length of bar is extracted:" \
-    "1. A solid red dot on the bar "
+    "Upload a DXF drawing and automatically generate a Bar Bending Schedule.\n"
+    "The file is to be in dxf. Every member is to have an annotation.\n\n"
+    "Requirements if length of bar is extracted:\n"
+    "1. A solid red dot on the bar"
 )
 
 uploaded_file = st.file_uploader(
@@ -77,3 +71,4 @@ if uploaded_file:
                     file_name="BBS_from_DXF.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
+

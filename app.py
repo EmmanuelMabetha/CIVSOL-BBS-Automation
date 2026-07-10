@@ -2,13 +2,24 @@ import streamlit as st
 from pathlib import Path
 import tempfile
 
-# This must be called EXACTLY ONCE, right at the very beginning
+# 1. This must be called first with real, supported arguments
 st.set_page_config(
     page_title="CIVSOL BBS Extraction",
-    layout="wide",
-    client_config={"hideTopBar": True}
+    layout="wide"
 )
 
+# 2. Injected CSS to hide the Top Header Bar, Hamburger Menu, and Footer
+hide_elements_css = """
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    .stAppDeployButton {display: none;}
+    </style>
+"""
+st.markdown(hide_elements_css, unsafe_allow_html=True)
+
+# 3. Rest of your imports
 from dxf_bbs_extractor import process_dxf
 
 st.title("CIVSOL BBS Automation")
@@ -71,4 +82,3 @@ if uploaded_file:
                     file_name="BBS_from_DXF.xlsx",
                     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 )
-

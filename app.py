@@ -4,6 +4,9 @@ import tempfile
 
 from dxf_bbs_extractor import process_dxf
 
+st.set_page_config(
+    client_config={"hideTopBar": True}
+)
 
 st.set_page_config(
     page_title="CIVSOL BBS Extraction",

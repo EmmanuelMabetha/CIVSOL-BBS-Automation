@@ -34,11 +34,9 @@ against two independent sources for this specific project:
      i.e. independently confirmed against a real fabrication drawing, not
      just the standard's own diagram.
 
-All three sources agree on the formulas below. An earlier pass through this
-library had concluded shape codes 34 and 35 don't exist in this series --
-that conclusion was wrong. You've since located both in your own copy of
-SANS 282:2011 and had a professional engineer verify the formulas, so 34
-and 35 are now included below as confirmed entries like everything else.
+All three sources agree, including on the fact that shape codes 34 and 35
+do not exist in this series at all (the numbering genuinely jumps from 20
+straight to 36).
 
 Every entry below has a "confidence" field:
 
@@ -161,54 +159,6 @@ _add(
 )
 
 _add(
-    "32", "Straight bar with a single hook/curl at one end",
-    params=["A", "h"], segments=1, bend_angles=["hook"],
-    formula_str="A + h  (PROVISIONAL -- not yet confirmed against Table 2)",
-    formula=lambda A, h, **k: A + h,
-    confidence="unverified",
-    notes="Geometry (one curved hook at one end, dimension A only) is confirmed "
-          "directly from the SANS 282:2004 Ed 5.1 chart. The length formula shown "
-          "here is a provisional guess by analogy to 34/35's pattern (n added per "
-          "bend allowance -- here h, the standard hook allowance, since this is a "
-          "curl/hook rather than a sharp bend), NOT transcribed from Table 2. "
-          "Do not trust the length for real bars until Table 2 confirms it -- "
-          "confidence is 'unverified' for exactly this reason, even though the "
-          "shape itself is real and confirmed.",
-)
-
-_add(
-    "33", "Straight bar with a hook/curl at both ends",
-    params=["A", "h"], segments=1, bend_angles=["hook", "hook"],
-    formula_str="A + 2h  (PROVISIONAL -- not yet confirmed against Table 2)",
-    formula=lambda A, h, **k: A + 2 * h,
-    confidence="unverified",
-    notes="Geometry (curved hooks at both ends, dimension A only) is confirmed "
-          "directly from the SANS 282:2004 Ed 5.1 chart. The length formula is a "
-          "provisional guess by analogy to 32/34/35, NOT transcribed from Table 2 "
-          "-- do not trust for real bars until confirmed.",
-)
-
-_add(
-    "34", "Single bend with allowance n",
-    params=["A", "n"], segments=2, bend_angles=["variable"],
-    formula_str="A + n",
-    formula=lambda A, n, **k: A + n,
-    notes="Straight leg A with a single bent allowance tail n. Formula located "
-          "directly in the user's own copy of SANS 282:2011 and confirmed by a "
-          "professional engineer.",
-)
-
-_add(
-    "35", "Double bend with two allowances n",
-    params=["A", "n"], segments=3, bend_angles=["variable", "variable"],
-    formula_str="A + 2n",
-    formula=lambda A, n, **k: A + 2 * n,
-    notes="Straight main leg A with two bent allowance tails n at each end. "
-          "Formula located directly in the user's own copy of SANS 282:2011 "
-          "and confirmed by a professional engineer.",
-)
-
-_add(
     "36", "S-shape: straight legs with a hooked/curved return at each end",
     params=["A", "B", "C", "D", "E", "d"], segments=5,
     bend_angles=["large_radius", "large_radius"],
@@ -248,15 +198,10 @@ _add(
 
 _add(
     "41", "Cranked bar, single crank (angle <= 45 deg)",
-    params=["A", "B", "C"], segments=3, bend_angles=["<=45", "<=45"],
+    params=["A", "B", "C"], segments=3, bend_angles=["<=45"],
     formula_str="A + B + C",
     formula=lambda A, B, C, **k: A + B + C,
     condition="Angle with horizontal <= 45 deg; otherwise see note 4.",
-    notes="Fixed: was previously listing only 1 bend angle for a 3-segment shape "
-          "(needs 2, one at each junction). Best-judgment fix per your direction "
-          "-- both bends taken as the same shallow crank angle (enters and exits "
-          "the diagonal symmetrically), matching the standard cranked-bar "
-          "convention. Not independently re-confirmed against Table 2.",
 )
 
 _add(
@@ -288,16 +233,10 @@ _add(
 
 _add(
     "48", "Cranked bar variant (offset then straight run)",
-    params=["A", "B", "C"], segments=3, bend_angles=["<=45", 90],
+    params=["A", "B", "C"], segments=3, bend_angles=["<=45"],
     formula_str="A + B + C",
     formula=lambda A, B, C, **k: A + B + C,
     condition="Angle with horizontal <= 45 deg; otherwise see note 4.",
-    notes="Fixed: was previously listing only 1 bend angle for a 3-segment shape. "
-          "Best-judgment fix per your direction -- the SANS chart shows a distinct "
-          "vertical uptick at the very end after the diagonal (not just a height "
-          "dimension line like 41 has), so the second bend is taken as ~90 deg "
-          "rather than a second shallow crank. Not independently re-confirmed "
-          "against Table 2.",
 )
 
 _add(
@@ -505,28 +444,46 @@ def calculate_length(code: str, **dims) -> float:
 def match_shape_by_geometry(num_segments: int, angles: list) -> list:
     """
     Given geometry extracted from a DXF entity group (number of straight
-    segments, list of approximate angles in degrees between consecutive
-    segments), return a list of candidate shape codes worth checking.
+    LINE segments, list of actual turn angles in degrees between
+    consecutive segments), return a list of candidate shape codes worth
+    checking, most-plausible first.
 
-    This is a coarse first-pass filter, not a definitive match -- always
-    fall back to shape code 99 if nothing fits confidently, and treat
-    "confirmed" candidates as higher priority than "unverified" ones.
+    Segment count must match exactly. For each bend, the candidate's
+    bend_angles entry must be compatible with the traced angle:
+      - a numeric entry (e.g. 90) must be within ANGLE_TOL_DEG of it
+      - "<=45" matches any traced angle <= 45 (+tolerance)
+      - non-numeric entries that describe geometry a straight-LINE chain
+        tracer cannot produce at all (large_radius, hook, lap, helix,
+        radius, sharp_v) are excluded here -- a real arc/curve bend isn't
+        representable as a sharp vertex angle between two LINEs, so a
+        candidate that requires one is not a match, no matter the count.
+
+    This is still a filter, not a definitive match -- always fall back to
+    shape code 99 if nothing fits confidently, and treat "confirmed"
+    candidates as higher priority than "unverified" ones.
     """
+    ANGLE_TOL_DEG = 15
+
+    def _bend_compatible(spec, traced) -> bool:
+        if isinstance(spec, (int, float)):
+            return abs(spec - traced) <= ANGLE_TOL_DEG
+        if spec == "<=45":
+            return traced <= 45 + ANGLE_TOL_DEG
+        return False  # large_radius / hook / lap / helix / radius / sharp_v / etc.
+
     candidates = []
     for code, shape in SHAPE_CODES.items():
-        if shape.segments is None:
+        if shape.segments is None or shape.segments != num_segments:
             continue
-        if shape.segments != num_segments:
+        if not shape.bend_angles:
+            if not angles:
+                candidates.append(code)
             continue
-        # Straight length-for-length angle-count match only. The previous
-        # version of this check had "or not shape.bend_angles", meant to be
-        # lenient for shapes with an unspecified bend structure -- but that
-        # silently let code 20 (bend_angles=[], meaning "zero bends") match
-        # ANY geometry with 1 segment, including a hooked/curved bar that
-        # should have candidated as 32/33/65 instead. An empty bend_angles
-        # list means "exactly zero bends expected", not "don't care" -- so
-        # it must only match when the measured angles list is ALSO empty.
-        if len(shape.bend_angles) == len(angles):
+        if len(shape.bend_angles) != len(angles):
+            continue
+        forward = all(_bend_compatible(spec, traced) for spec, traced in zip(shape.bend_angles, angles))
+        reverse = all(_bend_compatible(spec, traced) for spec, traced in zip(shape.bend_angles, reversed(angles)))
+        if forward or reverse:
             candidates.append(code)
     candidates.sort(key=lambda c: 0 if SHAPE_CODES[c].confidence == "confirmed" else 1)
     return candidates or ["99"]
